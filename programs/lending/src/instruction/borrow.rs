@@ -36,12 +36,11 @@ pub struct Deposit<'info>{
 }
 
 // 1. CPI transfer from user's token account to bank's token account
-// 2. 
-// 3.
-// 4.
-// 5.
 
 pub fn process_deposit(ctx : Context<Deposit>,amount : u64)-> Result<()>{
-
+    // check if user has enough collateral to borrow
+    let bank = &mut ctx.accounts.bank;
+    let user = &mut ctx.accounts.user_account;
+    
     Ok(())
 }
