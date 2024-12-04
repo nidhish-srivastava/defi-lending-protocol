@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token_interface::{Mint,TokenAccount,TokenInterface,TransferChecked};
+use anchor_spl::token_interface::{ self, Mint, TokenAccount, TokenInterface, TransferChecked };
 use crate::state::*;
 use crate::error::ErrorCode;
 
@@ -22,6 +22,12 @@ pub struct Withdraw<'info>{
     )]
     pub bank_token_account : InterfaceAccount<'info,TokenAccount>, // the bank's token account holding the tokens to be withdrawn
     #[account(
+        mut, 
+        seeds = [signer.key().as_ref()],
+        bump,
+    )]  
+    pub user_account: Account<'info, User>,
+    #[account(
         init_if_needed,
         payer = signer,
         associated_token::mint = mint,
@@ -37,11 +43,15 @@ pub struct Withdraw<'info>{
 }
 
 // 1. CPI transfer from bank's token account to user's token account
+// 2. Calculate new shares to be removed from the bank
+// 3. Update user's deposited amount and total collateral value
+// 4. Update bank's total deposits and total deposit shares
+// 5. Update users health factor ??
 
 pub fn process_withdraw(ctx : Context<Withdraw>,amount : u64) -> Result<()>{
     let user = &mut ctx.accounts.user_account;
 
-    let deposited_value;  
+    let deposited_value; 
 
     // Initialising deposited value based on the mint address
 
@@ -96,5 +106,5 @@ pub fn process_withdraw(ctx : Context<Withdraw>,amount : u64) -> Result<()>{
     bank.total_deposits -= amount;
     bank.total_deposit_shares -= shares_to_remove as u64;
     
-    Ok(())  
+    Ok(())     
 }

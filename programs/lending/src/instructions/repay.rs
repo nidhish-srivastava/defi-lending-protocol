@@ -48,7 +48,7 @@ pub fn process_repay(ctx:Context<Repay>,amount : u64) -> Result<()>{
     let borrowed_asset;
 
      match ctx.accounts.mint.to_account_info().key(){
-        key if key == user.user_address => { // Checks the mint key to determine if borrowed asset is usdc or sol
+        key if key == user.usdc_address => { // Checks the mint key to determine if borrowed asset is usdc or sol
             borrowed_asset = user.borrowed_usdc;
         }
         _ => {
@@ -86,7 +86,7 @@ pub fn process_repay(ctx:Context<Repay>,amount : u64) -> Result<()>{
     match ctx.accounts.mint.to_account_info().key(){
         key if key == user.usdc_address =>{
             user.borrowed_usdc -= amount;
-            user.borrowed_usdc_shares -= users.shares;
+            user.borrowed_usdc_shares -= users_shares;
         },
         _=>{
             user.borrowed_sol -= amount;
