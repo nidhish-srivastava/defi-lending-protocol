@@ -7,20 +7,20 @@ use crate::error::ErrorCode;
 #[derive(Accounts)]
 pub struct Withdraw<'info>{
     #[account(mut)]
-    pub signer : Signer<'info>,
-    pub mint : InterfaceAccount<'info,Mint>,
+    pub signer : Signer<'info>, // user initiating the withdrawal
+    pub mint : InterfaceAccount<'info,Mint>, // token mint
     #[account(
         mut,
         seeds = [mint.key().as_ref()],
         bump
     )]
-    pub bank : Account<'info,Bank>,
+    pub bank : Account<'info,Bank>, // the bank's state account
     #[account(
         mut,
         seeds = [b"treasury",mint.key().as_ref()],
         bump
     )]
-    pub bank_token_account : InterfaceAccount<'info,TokenAccount>,
+    pub bank_token_account : InterfaceAccount<'info,TokenAccount>, // the bank's token account holding the tokens to be withdrawn
     #[account(
         init_if_needed,
         payer = signer,
@@ -28,7 +28,9 @@ pub struct Withdraw<'info>{
         associated_token::authority = signer,
         associated_token::token_program = token_program
     )]
-    pub user_token_account: InterfaceAccount<'info, TokenAccount>, 
+    pub user_token_account: InterfaceAccount<'info, TokenAccount>, // the user's token account where tokens will be transferred
+
+    // Programs necessary for handling token operations and system instuctions
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -37,5 +39,62 @@ pub struct Withdraw<'info>{
 // 1. CPI transfer from bank's token account to user's token account
 
 pub fn process_withdraw(ctx : Context<Withdraw>,amount : u64) -> Result<()>{
-    Ok(())
+    let user = &mut ctx.accounts.user_account;
+
+    let deposited_value;  
+
+    // Initialising deposited value based on the mint address
+
+    // FIXME: Change from if statement to match statement?? Use PDA deserialization to get the mint address??
+    if ctx.accounts.mint.to_account_info().key() == user.usdc_address {
+        deposited_value = user.deposited_usdc;
+    } else {
+        deposited_value = user.deposited_sol;
+    }
+// Ensuring user has enough deposited value to withdraw the requested amoint
+    if amount > deposited_value {
+        return Err(ErrorCode::InsufficientFunds.into());
+    }
+
+    // Token Transfer
+    let transfer_cpi_accounts = TransferChecked {
+        from: ctx.accounts.bank_token_account.to_account_info(),
+        mint: ctx.accounts.mint.to_account_info(),
+        to: ctx.accounts.user_token_account.to_account_info(),
+        authority: ctx.accounts.bank_token_account.to_account_info(),
+    };
+
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let mint_key = ctx.accounts.mint.key();
+    let signer_seeds: &[&[&[u8]]] = &[
+        &[
+            b"treasury",
+            mint_key.as_ref(),
+            &[ctx.bumps.bank_token_account],
+        ],
+    ];
+    let cpi_ctx = CpiContext::new(cpi_program, transfer_cpi_accounts).with_signer(signer_seeds);
+
+    let decimals = ctx.accounts.mint.decimals;
+
+    token_interface::transfer_checked(cpi_ctx, amount, decimals)?;
+
+
+    // Calculates the proportion of deposit shares to remove based on the amount withdrawn
+    // It updates the user's deposited values and the protocol's total deposits and shares to reflect the withdrawal
+    let bank = &mut ctx.accounts.bank;
+    let shares_to_remove = (amount as f64 / bank.total_deposits as f64) * bank.total_deposit_shares as f64;
+
+    let user = &mut ctx.accounts.user_account;
+    
+    if ctx.accounts.mint.to_account_info().key() == user.usdc_address {
+        user.deposited_usdc -= shares_to_remove as u64;
+    } else {
+        user.deposited_sol -= shares_to_remove as u64;
+    }
+
+    bank.total_deposits -= amount;
+    bank.total_deposit_shares -= shares_to_remove as u64;
+    
+    Ok(())  
 }
