@@ -83,6 +83,7 @@ pub fn process_repay(ctx:Context<Repay>,amount : u64) -> Result<()>{
     let borrowed_ratio = amount.checked_div(bank.total_borrowed).unwrap();
     let users_shares = bank.total_borrowed_shares.checked_mul(borrowed_ratio).unwrap();
 
+    // since repay so borrowed amount is getting lowered
     match ctx.accounts.mint.to_account_info().key(){
         key if key == user.usdc_address =>{
             user.borrowed_usdc -= amount;
