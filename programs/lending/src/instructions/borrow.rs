@@ -136,9 +136,13 @@ The user's borrowed amounts and shares are updated based on whether they are bor
     Ok(())
 }
 
+/*
+The calculate_accrued_interest function calculates the interest accrued on the collateral that a user has deposited over time, based on an interest rate and the time elapsed since the last update.
+*/
 fn calculate_accrued_interest(deposited: u64, interest_rate: u64, last_update: i64) -> Result<u64> {
     let current_time = Clock::get()?.unix_timestamp;
     let time_elapsed = current_time - last_update;
+    // Apply exponential growth formula
     let new_value = (deposited as f64 * E.powf(interest_rate as f32 * time_elapsed as f32) as f64) as u64;
     Ok(new_value)
 }
